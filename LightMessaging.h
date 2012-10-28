@@ -130,6 +130,20 @@ static inline kern_return_t LMConnectionSendOneWay(LMConnectionRef connection, S
 	return LMMachMsg(connection, &message->head, MACH_SEND_MSG, size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 }
 
+static inline kern_return_t LMConnectionSendEmptyOneWay(LMConnectionRef connection, SInt32 messageId)
+{
+	// TODO: Optimize so we don't use the additional stack space
+	size_t size = sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t);
+	LMMessage message;
+	memset(&message, 0, size);
+	message.head.msgh_id = messageId;
+	message.head.msgh_size = size;
+	message.head.msgh_local_port = MACH_PORT_NULL;
+	message.head.msgh_reserved = 0;
+	message.head.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+	return LMMachMsg(connection, &message.head, MACH_SEND_MSG, size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+}
+
 static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, SInt32 messageId, const void *data, size_t length, LMResponseBuffer *responseBuffer)
 {
 	// Create a reply port

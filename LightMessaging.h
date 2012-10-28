@@ -2,7 +2,7 @@
 #import <ImageIO/ImageIO.h>
 #include <mach/mach.h>
 #include <mach/mach_init.h>
-#include <bootstrap.h>
+#include "bootstrap.h"
 
 #ifdef __OBJC__
 #import <UIKit/UIKit.h>

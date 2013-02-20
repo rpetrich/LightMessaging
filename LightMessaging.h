@@ -1,3 +1,11 @@
+#ifndef __APPLE_API_PRIVATE
+#define __APPLE_API_PRIVATE
+#include "sandbox.h"
+#undef __APPLE_API_PRIVATE
+#else
+#include "sandbox.h"
+#endif
+
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #include <mach/mach.h>
@@ -98,6 +106,12 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 		kern_return_t err;
 		if (connection->serverPort == MACH_PORT_NULL) {
 			mach_port_t selfTask = mach_task_self();
+			if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_5_0) {
+				int sandbox_result = sandbox_check(getpid(), "mach-lookup", SANDBOX_FILTER_LOCAL_NAME | SANDBOX_CHECK_NO_REPORT, connection->serverName);
+				if (sandbox_result) {
+					return sandbox_result;
+				}
+			}
 			// Lookup remote port
 			mach_port_t bootstrap = MACH_PORT_NULL;
 			task_get_bootstrap_port(selfTask, &bootstrap);

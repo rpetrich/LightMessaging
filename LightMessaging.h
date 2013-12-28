@@ -205,6 +205,7 @@ static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLo
 	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
 	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
 	mach_port_t port = CFMachPortGetPort(machPort);
+	rocketbootstrap_unlock(serverName);
 	return bootstrap_register(bootstrap, serverName, port);
 }
 #pragma GCC diagnostic warning "-Wdeprecated-declarations"

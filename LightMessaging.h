@@ -10,7 +10,7 @@
 #import <ImageIO/ImageIO.h>
 #include <mach/mach.h>
 #include <mach/mach_init.h>
-#include "bootstrap.h"
+#include "../rocketbootstrap/rocketbootstrap.h"
 
 #ifdef __OBJC__
 #import <UIKit/UIKit.h>
@@ -115,7 +115,7 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 			// Lookup remote port
 			mach_port_t bootstrap = MACH_PORT_NULL;
 			task_get_bootstrap_port(selfTask, &bootstrap);
-			err = bootstrap_look_up(bootstrap, connection->serverName, &connection->serverPort);
+			err = rocketbootstrap_look_up(bootstrap, connection->serverName, &connection->serverPort);
 			if (err)
 				return err;
 		}

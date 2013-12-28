@@ -106,7 +106,7 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 		kern_return_t err;
 		if (connection->serverPort == MACH_PORT_NULL) {
 			mach_port_t selfTask = mach_task_self();
-			if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_5_0) {
+			if ((kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_5_0) && (kCFCoreFoundationVersionNumber < 800.0)) {
 				int sandbox_result = sandbox_check(getpid(), "mach-lookup", SANDBOX_FILTER_LOCAL_NAME | SANDBOX_CHECK_NO_REPORT, connection->serverName);
 				if (sandbox_result) {
 					return sandbox_result;

@@ -1,2 +1,2 @@
 Simple low-level replacement for CFMessagePort
-Very experimental!
+Now stable and with RocketBootstrap integration by default

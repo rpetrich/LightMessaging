@@ -195,12 +195,12 @@ static inline void LMResponseBufferFree(LMResponseBuffer *responseBuffer)
 }
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLoop, CFMachPortCallBack callback)
+static inline kern_return_t LMStartServiceWithUserInfo(name_t serverName, CFRunLoopRef runLoop, CFMachPortCallBack callback, void *userInfo)
 {
 	// TODO: Figure out what the real interface is, implement service stopping, handle failures correctly
 	mach_port_t bootstrap = MACH_PORT_NULL;
 	task_get_bootstrap_port(mach_task_self(), &bootstrap);
-	CFMachPortContext context = { 0, NULL, NULL, NULL, NULL };
+	CFMachPortContext context = { 0, userInfo, NULL, NULL, NULL };
 	CFMachPortRef machPort = CFMachPortCreate(kCFAllocatorDefault, callback, &context, NULL);
 	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
 	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
@@ -209,6 +209,11 @@ static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLo
 	return bootstrap_register(bootstrap, serverName, port);
 }
 #pragma GCC diagnostic warning "-Wdeprecated-declarations"
+
+static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLoop, CFMachPortCallBack callback)
+{
+	return LMStartServiceWithUserInfo(serverName, runLoop, callback, NULL);
+}
 
 static inline kern_return_t LMSendReply(mach_port_t replyPort, const void *data, size_t length)
 {

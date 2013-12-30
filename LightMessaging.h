@@ -22,13 +22,19 @@ typedef struct {
 } LMConnection;
 typedef LMConnection *LMConnectionRef;
 
-#define __LMMaxInlineSize 4096
+#define __LMMaxInlineSize 4096 + sizeof(LMMessage)
 typedef struct __LMMessage {
 	mach_msg_header_t head;
 	mach_msg_body_t body;
-    mach_msg_ool_descriptor_t out_of_line;
-    size_t length;
-	uint8_t bytes[0];
+	union {
+		struct {
+			mach_msg_ool_descriptor_t descriptor;
+		} out_of_line;
+		struct {
+			uint32_t length;
+			uint8_t bytes[0];
+		} in_line;
+	} data;
 } LMMessage;
 
 typedef struct __LMResponseBuffer {
@@ -36,7 +42,7 @@ typedef struct __LMResponseBuffer {
 	uint8_t slack[__LMMaxInlineSize - sizeof(LMMessage) + MAX_TRAILER_SIZE];
 } LMResponseBuffer;
 
-static inline size_t LMBufferSizeForLength(size_t length)
+static inline uint32_t LMBufferSizeForLength(uint32_t length)
 {
 	if (length + sizeof(LMMessage) > __LMMaxInlineSize)
 		return sizeof(LMMessage);
@@ -44,33 +50,34 @@ static inline size_t LMBufferSizeForLength(size_t length)
 		return ((sizeof(LMMessage) + length) + 3) & ~0x3;
 }
 
-static inline void LMMessageCopyInline(LMMessage *message, const void *data, size_t length)
+static inline void LMMessageCopyInline(LMMessage *message, const void *data, uint32_t length)
 {
-	message->length = length;
+	message->data.in_line.length = length;
 	if (data) {
-		memcpy(message->bytes, data, length);
+		memcpy(message->data.in_line.bytes, data, length);
 	}
 }
 
-static inline void LMMessageAssignOutOfLine(LMMessage *message, const void *data, size_t length)
+static inline void LMMessageAssignOutOfLine(LMMessage *message, const void *data, uint32_t length)
 {
 	message->head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	message->body.msgh_descriptor_count = 1;
-	message->out_of_line.type = MACH_MSG_OOL_DESCRIPTOR;
-	message->out_of_line.copy = MACH_MSG_VIRTUAL_COPY;
-	message->out_of_line.deallocate = false;
-	message->out_of_line.address = (void *)data;
-	message->out_of_line.size = length;
+	message->data.out_of_line.descriptor.type = MACH_MSG_OOL_DESCRIPTOR;
+	message->data.out_of_line.descriptor.copy = MACH_MSG_VIRTUAL_COPY;
+	message->data.out_of_line.descriptor.deallocate = false;
+	message->data.out_of_line.descriptor.address = (void *)data;
+	message->data.out_of_line.descriptor.size = length;
 }
 
-static inline void LMMessageAssignData(LMMessage *message, const void *data, size_t length)
+static inline void LMMessageAssignData(LMMessage *message, const void *data, uint32_t length)
 {
-	message->length = length;
 	if (length == 0) {
 		message->body.msgh_descriptor_count = 0;
+		message->data.in_line.length = length;
 	} else if (message->head.msgh_size != sizeof(LMMessage)) {
 		message->body.msgh_descriptor_count = 0;
-		memcpy(message->bytes, data, length);
+		message->data.in_line.length = length;
+		memcpy(message->data.in_line.bytes, data, length);
 	} else {
 		LMMessageAssignOutOfLine(message, data, length);
 	}
@@ -78,24 +85,21 @@ static inline void LMMessageAssignData(LMMessage *message, const void *data, siz
 
 static inline void *LMMessageGetData(LMMessage *message)
 {
-	if (message->length == 0)
+	if (message->body.msgh_descriptor_count)
+		return message->data.out_of_line.descriptor.address;
+	if (message->data.in_line.length == 0)
 		return NULL;
-	if (message->body.msgh_descriptor_count != 0 && message->out_of_line.type == MACH_MSG_OOL_DESCRIPTOR)
-		return message->out_of_line.address;
-	return &message->bytes;
+	return &message->data.in_line.bytes;
 }
 
-static inline size_t LMMessageGetDataLength(LMMessage *message)
+static inline uint32_t LMMessageGetDataLength(LMMessage *message)
 {
-	size_t result = message->length;
-	if (result == 0)
-		return 0;
-	// Use descriptor size if we have an out_of_line memory region
-	if (message->body.msgh_descriptor_count != 0 && message->out_of_line.type == MACH_MSG_OOL_DESCRIPTOR)
-		return message->out_of_line.size;
+	if (message->body.msgh_descriptor_count)
+		return message->data.out_of_line.descriptor.size;
+	uint32_t result = message->data.in_line.length;
 	// Clip to the maximum size of a message buffer, prevents clients from forcing reads outside the region
-	if (result > __LMMaxInlineSize - offsetof(LMMessage, bytes))
-		return __LMMaxInlineSize - offsetof(LMMessage, bytes);
+	if (result > __LMMaxInlineSize - offsetof(LMMessage, data.in_line.bytes))
+		return __LMMaxInlineSize - offsetof(LMMessage, data.in_line.bytes);
 	// Client specified the right size, yay!
 	return result;
 }
@@ -128,10 +132,10 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 	}
 }
 
-static inline kern_return_t LMConnectionSendOneWay(LMConnectionRef connection, SInt32 messageId, const void *data, size_t length)
+static inline kern_return_t LMConnectionSendOneWay(LMConnectionRef connection, SInt32 messageId, const void *data, uint32_t length)
 {
 	// Send message
-	size_t size = LMBufferSizeForLength(length);
+	uint32_t size = LMBufferSizeForLength(length);
 	uint8_t buffer[size];
 	LMMessage *message = (LMMessage *)&buffer[0];
 	memset(message, 0, sizeof(LMMessage));
@@ -147,7 +151,7 @@ static inline kern_return_t LMConnectionSendOneWay(LMConnectionRef connection, S
 static inline kern_return_t LMConnectionSendEmptyOneWay(LMConnectionRef connection, SInt32 messageId)
 {
 	// TODO: Optimize so we don't use the additional stack space
-	size_t size = sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t);
+	uint32_t size = sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t);
 	LMMessage message;
 	memset(&message, 0, size);
 	message.head.msgh_id = messageId;
@@ -158,7 +162,7 @@ static inline kern_return_t LMConnectionSendEmptyOneWay(LMConnectionRef connecti
 	return LMMachMsg(connection, &message.head, MACH_SEND_MSG, size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 }
 
-static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, SInt32 messageId, const void *data, size_t length, LMResponseBuffer *responseBuffer)
+static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, SInt32 messageId, const void *data, uint32_t length, LMResponseBuffer *responseBuffer)
 {
 	// Create a reply port
 	mach_port_t selfTask = mach_task_self();
@@ -169,7 +173,7 @@ static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, S
 		return err;
 	}
 	// Send message
-	size_t size = LMBufferSizeForLength(length);
+	uint32_t size = LMBufferSizeForLength(length);
 	LMMessage *message = &responseBuffer->message;
 	memset(message, 0, sizeof(LMMessage));
 	message->head.msgh_id = messageId;
@@ -188,8 +192,8 @@ static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, S
 
 static inline void LMResponseBufferFree(LMResponseBuffer *responseBuffer)
 {
-	if (responseBuffer->message.body.msgh_descriptor_count != 0 && responseBuffer->message.out_of_line.type == MACH_MSG_OOL_DESCRIPTOR) {
-		vm_deallocate(mach_task_self(), (vm_address_t)responseBuffer->message.out_of_line.address, responseBuffer->message.out_of_line.size);
+	if (responseBuffer->message.body.msgh_descriptor_count != 0 && responseBuffer->message.data.out_of_line.descriptor.type == MACH_MSG_OOL_DESCRIPTOR) {
+		vm_deallocate(mach_task_self(), (vm_address_t)responseBuffer->message.data.out_of_line.descriptor.address, responseBuffer->message.data.out_of_line.descriptor.size);
 		responseBuffer->message.body.msgh_descriptor_count = 0;
 	}
 }
@@ -215,11 +219,11 @@ static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLo
 	return LMStartServiceWithUserInfo(serverName, runLoop, callback, NULL);
 }
 
-static inline kern_return_t LMSendReply(mach_port_t replyPort, const void *data, size_t length)
+static inline kern_return_t LMSendReply(mach_port_t replyPort, const void *data, uint32_t length)
 {
 	if (replyPort == MACH_PORT_NULL)
 		return 0;
-	size_t size = LMBufferSizeForLength(length);
+	uint32_t size = LMBufferSizeForLength(length);
 	uint8_t buffer[size];
 	memset(buffer, 0, sizeof(LMMessage));
 	LMMessage *response = (LMMessage *)&buffer[0];
@@ -288,10 +292,10 @@ static inline kern_return_t LMConnectionSendTwoWayData(LMConnectionRef connectio
 		return LMConnectionSendTwoWay(connection, messageId, NULL, 0, buffer);
 }
 
-static inline int LMResponseConsumeInteger(LMResponseBuffer *buffer)
+static inline int32_t LMResponseConsumeInteger(LMResponseBuffer *buffer)
 {
 	LMResponseBufferFree(buffer);
-	return LMMessageGetDataLength(&buffer->message) == sizeof(int) ? *(int *)buffer->message.bytes : 0;
+	return LMMessageGetDataLength(&buffer->message) == sizeof(int) ? *(int32_t *)buffer->message.data.in_line.bytes : 0;
 }
 
 #ifdef __OBJC__
@@ -303,7 +307,7 @@ static inline kern_return_t LMConnectionSendTwoWayPropertyList(LMConnectionRef c
 
 static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 {
-	size_t length = LMMessageGetDataLength(&buffer->message);
+	uint32_t length = LMMessageGetDataLength(&buffer->message);
 	id result;
 	if (length) {
 		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
@@ -316,16 +320,21 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	return result;
 }
 
-typedef struct {
-	size_t width;
-	size_t height;
-	size_t bitsPerComponent;
-	size_t bitsPerPixel;
-	size_t bytesPerRow;
+typedef struct __attribute__((aligned(0x1))) __attribute__((packed)) {
+	uint32_t width;
+	uint32_t height;
+	uint32_t bitsPerComponent;
+	uint32_t bitsPerPixel;
+	uint32_t bytesPerRow;
 	CGBitmapInfo bitmapInfo;
-	CGFloat scale;
+	float scale;
 	UIImageOrientation orientation;
 } LMImageHeader;
+
+typedef struct {
+	LMMessage response;
+	LMImageHeader imageHeader;
+} LMImageMessage;
 
 static void LMCGDataProviderReleaseCallback(void *info, const void *data, size_t size)
 {
@@ -334,10 +343,11 @@ static void LMCGDataProviderReleaseCallback(void *info, const void *data, size_t
 
 static inline UIImage *LMResponseConsumeImage(LMResponseBuffer *buffer)
 {
-	if (buffer->message.body.msgh_descriptor_count != 0 && buffer->message.out_of_line.type == MACH_MSG_OOL_DESCRIPTOR) {
-		const void *bytes = buffer->message.out_of_line.address;
-		const LMImageHeader *header = (const LMImageHeader *)&buffer->message.bytes;
-		CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, bytes, buffer->message.out_of_line.size, LMCGDataProviderReleaseCallback);
+	if (buffer->message.body.msgh_descriptor_count != 0 && buffer->message.data.out_of_line.descriptor.type == MACH_MSG_OOL_DESCRIPTOR) {
+		const void *bytes = buffer->message.data.out_of_line.descriptor.address;
+		const LMImageMessage *message = bytes;
+		const LMImageHeader *header = &message->imageHeader;
+		CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, bytes, buffer->message.data.out_of_line.descriptor.size, LMCGDataProviderReleaseCallback);
 		if (provider) {
 			CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
 			CGImageRef cgImage = CGImageCreate(header->width, header->height, header->bitsPerComponent, header->bitsPerPixel, header->bytesPerRow, colorSpace, header->bitmapInfo, provider, NULL, false, kCGRenderingIntentDefault);
@@ -371,10 +381,7 @@ static inline kern_return_t LMSendImageReply(mach_port_t replyPort, UIImage *ima
 {
 	if (replyPort == MACH_PORT_NULL)
 		return 0;
-	struct {
-		LMMessage response;
-		LMImageHeader imageHeader;
-	} buffer;
+	LMImageMessage buffer;
 	memset(&buffer, 0, sizeof(buffer));
 	buffer.response.head.msgh_id = 0;
 	buffer.response.head.msgh_size = sizeof(buffer);
@@ -403,7 +410,6 @@ static inline kern_return_t LMSendImageReply(mach_port_t replyPort, UIImage *ima
 					void *pointer = CGAccessSessionGetBytePointer(accessSession);
 					if (pointer) {
 						LMMessageAssignOutOfLine(&buffer.response, pointer, buffer.imageHeader.bytesPerRow * buffer.imageHeader.height);
-						buffer.response.length = sizeof(LMImageHeader);
 						hasLoadedData = true;
 					}
 				}
@@ -415,7 +421,6 @@ static inline kern_return_t LMSendImageReply(mach_port_t replyPort, UIImage *ima
 				}
 				imageData = CGDataProviderCopyData(dataProvider);
 				if (imageData) {
-					buffer.response.length = sizeof(LMImageHeader);
 					LMMessageAssignOutOfLine(&buffer.response, CFDataGetBytePtr(imageData), CFDataGetLength(imageData));
 				}
 			}

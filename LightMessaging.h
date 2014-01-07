@@ -345,7 +345,7 @@ static inline UIImage *LMResponseConsumeImage(LMResponseBuffer *buffer)
 {
 	if (buffer->message.body.msgh_descriptor_count != 0 && buffer->message.data.out_of_line.descriptor.type == MACH_MSG_OOL_DESCRIPTOR) {
 		const void *bytes = buffer->message.data.out_of_line.descriptor.address;
-		const LMImageMessage *message = bytes;
+		const LMImageMessage *message = (const LMImageMessage *)buffer;
 		const LMImageHeader *header = &message->imageHeader;
 		CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, bytes, buffer->message.data.out_of_line.descriptor.size, LMCGDataProviderReleaseCallback);
 		if (provider) {

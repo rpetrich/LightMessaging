@@ -6,11 +6,19 @@
 #include "sandbox.h"
 #endif
 
+#ifndef LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
+#define LIGHTMESSAGING_USE_ROCKETBOOTSTRAP 1
+#endif
+
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #include <mach/mach.h>
 #include <mach/mach_init.h>
+#if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
 #include "../rocketbootstrap/rocketbootstrap.h"
+#else
+#include "bootstrap.h"
+#endif
 
 #ifdef __OBJC__
 #import <UIKit/UIKit.h>
@@ -119,7 +127,11 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 			// Lookup remote port
 			mach_port_t bootstrap = MACH_PORT_NULL;
 			task_get_bootstrap_port(selfTask, &bootstrap);
+#if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
 			err = rocketbootstrap_look_up(bootstrap, connection->serverName, &connection->serverPort);
+#else
+			err = bootstrap_look_up(bootstrap, connection->serverName, &connection->serverPort);
+#endif
 			if (err)
 				return err;
 		}
@@ -209,7 +221,9 @@ static inline kern_return_t LMStartServiceWithUserInfo(name_t serverName, CFRunL
 	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
 	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
 	mach_port_t port = CFMachPortGetPort(machPort);
+#if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
 	rocketbootstrap_unlock(serverName);
+#endif
 	return bootstrap_register(bootstrap, serverName, port);
 }
 #pragma GCC diagnostic warning "-Wdeprecated-declarations"

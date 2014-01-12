@@ -20,10 +20,6 @@
 #include "bootstrap.h"
 #endif
 
-#ifdef __OBJC__
-#import <UIKit/UIKit.h>
-#endif
-
 typedef struct {
 	mach_port_t serverPort;
 	name_t serverName;
@@ -334,6 +330,9 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	return result;
 }
 
+#ifdef UIKIT_EXTERN
+#import <UIKit/UIImage.h>
+
 typedef struct __attribute__((aligned(0x1))) __attribute__((packed)) {
 	uint32_t width;
 	uint32_t height;
@@ -454,5 +453,7 @@ static inline kern_return_t LMSendImageReply(mach_port_t replyPort, UIImage *ima
 	}
 	return err;
 }
+
+#endif
 
 #endif

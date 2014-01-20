@@ -304,8 +304,9 @@ static inline kern_return_t LMConnectionSendTwoWayData(LMConnectionRef connectio
 
 static inline int32_t LMResponseConsumeInteger(LMResponseBuffer *buffer)
 {
+	int32_t result = LMMessageGetDataLength(&buffer->message) == sizeof(int32_t) ? *(int32_t *)buffer->message.data.in_line.bytes : 0;
 	LMResponseBufferFree(buffer);
-	return LMMessageGetDataLength(&buffer->message) == sizeof(int) ? *(int32_t *)buffer->message.data.in_line.bytes : 0;
+	return result;
 }
 
 #ifdef __OBJC__

@@ -229,6 +229,25 @@ static inline kern_return_t LMStartService(name_t serverName, CFRunLoopRef runLo
 	return LMStartServiceWithUserInfo(serverName, runLoop, callback, NULL);
 }
 
+static inline kern_return_t LMCheckInService(name_t serverName, CFRunLoopRef runLoop, CFMachPortCallBack callback, void *userInfo)
+{
+	// TODO: Figure out what the real interface is, implement service stopping, handle failures correctly
+	mach_port_t bootstrap = MACH_PORT_NULL;
+	task_get_bootstrap_port(mach_task_self(), &bootstrap);
+	CFMachPortContext context = { 0, userInfo, NULL, NULL, NULL };
+	mach_port_t port = MACH_PORT_NULL;
+	kern_return_t result = bootstrap_check_in(bootstrap, serverName, &port);
+	if (result)
+		return result;
+	CFMachPortRef machPort = CFMachPortCreateWithPort(kCFAllocatorDefault, port, callback, &context, NULL);
+	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
+	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
+#if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
+	rocketbootstrap_unlock(serverName);
+#endif
+	return 0;
+}
+
 static inline bool LMDataWithSizeIsValidMessage(const void *data, CFIndex size)
 {
 	if (size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t))

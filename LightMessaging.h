@@ -194,7 +194,7 @@ static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, S
 	if (err)
 		responseBuffer->message.body.msgh_descriptor_count = 0;
 	// Cleanup
-	mach_port_deallocate(selfTask, replyPort);
+	mach_port_mod_refs(selfTask, replyPort, MACH_PORT_RIGHT_RECEIVE, -1);
 	return err;
 }
 

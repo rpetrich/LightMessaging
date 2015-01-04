@@ -115,7 +115,7 @@ static inline mach_msg_return_t LMMachMsg(LMConnection *connection, mach_msg_hea
 		if (connection->serverPort == MACH_PORT_NULL) {
 			mach_port_t selfTask = mach_task_self();
 			if ((kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_5_0) && (kCFCoreFoundationVersionNumber < 800.0)) {
-				int sandbox_result = sandbox_check(getpid(), "mach-lookup", SANDBOX_FILTER_LOCAL_NAME | SANDBOX_CHECK_NO_REPORT, connection->serverName);
+				int sandbox_result = sandbox_check(getpid(), "mach-lookup", (enum sandbox_filter_type)(SANDBOX_FILTER_LOCAL_NAME | SANDBOX_CHECK_NO_REPORT), connection->serverName);
 				if (sandbox_result) {
 					return sandbox_result;
 				}
@@ -335,7 +335,7 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	uint32_t length = LMMessageGetDataLength(&buffer->message);
 	id result;
 	if (length) {
-		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
+		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const UInt8 *)LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
 		result = [NSPropertyListSerialization propertyListFromData:(NSData *)data mutabilityOption:0 format:NULL errorDescription:NULL];
 		CFRelease(data);
 	} else {

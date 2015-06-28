@@ -20,6 +20,18 @@
 #include "bootstrap.h"
 #endif
 
+#ifdef __OBJC__
+#ifndef __has_feature
+  #define __has_feature(x) 0
+#endif
+
+#if __has_feature(objc_arc)
+#define LMBridgedCast(a, b) (__bridge a)(b)
+#else
+#define LMBridgedCast(a, b) (a)(b)
+#endif
+#endif
+
 typedef struct {
 	mach_port_t serverPort;
 	name_t serverName;
@@ -346,7 +358,7 @@ static inline int32_t LMResponseConsumeInteger(LMResponseBuffer *buffer)
 
 static inline kern_return_t LMConnectionSendTwoWayPropertyList(LMConnectionRef connection, SInt32 messageId, id propertyList, LMResponseBuffer *buffer)
 {
-	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? (CFDataRef)[NSPropertyListSerialization dataFromPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 errorDescription:NULL] : NULL, buffer);
+	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? LMBridgedCast(CFDataRef, [NSPropertyListSerialization dataFromPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 errorDescription:NULL]) : NULL, buffer);
 }
 
 static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
@@ -355,7 +367,7 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	id result;
 	if (length) {
 		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const UInt8 *)LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
-		result = [NSPropertyListSerialization propertyListFromData:(NSData *)data mutabilityOption:0 format:NULL errorDescription:NULL];
+		result = [NSPropertyListSerialization propertyListFromData:LMBridgedCast(NSData *, data) mutabilityOption:0 format:NULL errorDescription:NULL];
 		CFRelease(data);
 	} else {
 		result = nil;

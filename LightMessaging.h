@@ -314,6 +314,24 @@ static inline kern_return_t LMSendCFDataReply(mach_port_t replyPort, CFDataRef d
 
 #ifdef __OBJC__
 
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+static inline id LMPropertyListForData(NSData *data)
+{
+	if ([NSPropertyListSerialization respondsToSelector:@selector(propertyListWithData:options:format:error:)])
+		return [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:NULL];
+
+	return [NSPropertyListSerialization propertyListFromData:data mutabilityOption:0 format:NULL errorDescription:NULL];
+}
+
+static inline NSData *LMDataForPropertyList(id propertyList)
+{
+	if ([NSPropertyListSerialization respondsToSelector:@selector(dataWithPropertyList:options:format:error:)])
+		return [NSPropertyListSerialization dataWithPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 options:0 error:NULL];
+
+	return [NSPropertyListSerialization dataFromPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 errorDescription:NULL];
+}
+#pragma GCC diagnostic warning "-Wdeprecated-declarations"
+
 static inline kern_return_t LMSendNSDataReply(mach_port_t replyPort, NSData *data)
 {
 	return LMSendReply(replyPort, [data bytes], [data length]);
@@ -322,7 +340,7 @@ static inline kern_return_t LMSendNSDataReply(mach_port_t replyPort, NSData *dat
 static inline kern_return_t LMSendPropertyListReply(mach_port_t replyPort, id propertyList)
 {
 	if (propertyList)
-		return LMSendNSDataReply(replyPort, [NSPropertyListSerialization dataFromPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 errorDescription:NULL]);
+		return LMSendNSDataReply(replyPort, LMDataForPropertyList(propertyList));
 	else
 		return LMSendReply(replyPort, NULL, 0);
 }
@@ -358,7 +376,7 @@ static inline int32_t LMResponseConsumeInteger(LMResponseBuffer *buffer)
 
 static inline kern_return_t LMConnectionSendTwoWayPropertyList(LMConnectionRef connection, SInt32 messageId, id propertyList, LMResponseBuffer *buffer)
 {
-	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? LMBridgedCast(CFDataRef, [NSPropertyListSerialization dataFromPropertyList:propertyList format:NSPropertyListBinaryFormat_v1_0 errorDescription:NULL]) : NULL, buffer);
+	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? LMBridgedCast(CFDataRef, LMDataForPropertyList(propertyList)) : NULL, buffer);
 }
 
 static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
@@ -367,7 +385,7 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	id result;
 	if (length) {
 		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const UInt8 *)LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
-		result = [NSPropertyListSerialization propertyListFromData:LMBridgedCast(NSData *, data) mutabilityOption:0 format:NULL errorDescription:NULL];
+		result = LMPropertyListForData(LMBridgedCast(NSData *, data));
 		CFRelease(data);
 	} else {
 		result = nil;

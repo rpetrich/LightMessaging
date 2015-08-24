@@ -26,9 +26,9 @@
 #endif
 
 #if __has_feature(objc_arc)
-#define LMBridgedCast(a, b) (__bridge a)(b)
+#define LMBridgedCast_(a, b) (__bridge a)(b)
 #else
-#define LMBridgedCast(a, b) (a)(b)
+#define LMBridgedCast_(a, b) (a)(b)
 #endif
 #endif
 
@@ -376,7 +376,7 @@ static inline int32_t LMResponseConsumeInteger(LMResponseBuffer *buffer)
 
 static inline kern_return_t LMConnectionSendTwoWayPropertyList(LMConnectionRef connection, SInt32 messageId, id propertyList, LMResponseBuffer *buffer)
 {
-	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? LMBridgedCast(CFDataRef, LMDataForPropertyList(propertyList)) : NULL, buffer);
+	return LMConnectionSendTwoWayData(connection, messageId, propertyList ? LMBridgedCast_(CFDataRef, LMDataForPropertyList(propertyList)) : NULL, buffer);
 }
 
 static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
@@ -385,7 +385,7 @@ static inline id LMResponseConsumePropertyList(LMResponseBuffer *buffer)
 	id result;
 	if (length) {
 		CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const UInt8 *)LMMessageGetData(&buffer->message), length, kCFAllocatorNull);
-		result = LMPropertyListForData(LMBridgedCast(NSData *, data));
+		result = LMPropertyListForData(LMBridgedCast_(NSData *, data));
 		CFRelease(data);
 	} else {
 		result = nil;

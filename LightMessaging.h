@@ -10,6 +10,13 @@
 #define LIGHTMESSAGING_USE_ROCKETBOOTSTRAP 1
 #endif
 
+#ifndef LIGHTMESSAGING_TIMEOUT
+#define LIGHTMESSAGING_TIMEOUT MACH_MSG_TIMEOUT_NONE
+#define _LIGHTMESSAGING_TIMEOUT_FLAGS 0
+#else
+#define _LIGHTMESSAGING_TIMEOUT_FLAGS (MACH_SEND_TIMEOUT | MACH_RCV_TIMEOUT)
+#endif
+
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #include <mach/mach.h>
@@ -202,7 +209,7 @@ static inline kern_return_t LMConnectionSendTwoWay(LMConnectionRef connection, S
 	message->head.msgh_reserved = 0;
 	message->head.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND_ONCE);
 	LMMessageAssignData(message, data, length);
-	err = LMMachMsg(connection, &message->head, MACH_SEND_MSG | MACH_RCV_MSG, size, sizeof(LMResponseBuffer), replyPort, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+	err = LMMachMsg(connection, &message->head, MACH_SEND_MSG | MACH_RCV_MSG | _LIGHTMESSAGING_TIMEOUT_FLAGS, size, sizeof(LMResponseBuffer), replyPort, LIGHTMESSAGING_TIMEOUT, MACH_PORT_NULL);
 	if (err)
 		responseBuffer->message.body.msgh_descriptor_count = 0;
 	// Cleanup

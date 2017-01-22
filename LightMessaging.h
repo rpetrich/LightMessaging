@@ -269,14 +269,16 @@ static inline kern_return_t LMCheckInService(name_t serverName, CFRunLoopRef run
 
 static inline bool LMDataWithSizeIsValidMessage(const void *data, CFIndex size)
 {
-	if (size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t))
+	if (size < 0)
+		return false;
+	if ((size_t)size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t))
 		return false;
 	const LMMessage *message = (const LMMessage *)data;
 	if (message->body.msgh_descriptor_count)
-		return size >= sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(mach_msg_ool_descriptor_t);
-	if (size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(uint32_t))
+		return (size_t)size >= sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(mach_msg_ool_descriptor_t);
+	if ((size_t)size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(uint32_t))
 		return false;
-	if (size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(uint32_t) + message->data.in_line.length)
+	if ((size_t)size < sizeof(mach_msg_header_t) + sizeof(mach_msg_body_t) + sizeof(uint32_t) + message->data.in_line.length)
 		return false;
 	return true;
 }

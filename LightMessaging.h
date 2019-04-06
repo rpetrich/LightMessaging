@@ -235,6 +235,7 @@ static inline kern_return_t LMStartServiceWithUserInfo(name_t serverName, CFRunL
 	CFMachPortRef machPort = CFMachPortCreate(kCFAllocatorDefault, callback, &context, NULL);
 	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
 	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
+	CFRelease(machPortSource);
 	mach_port_t port = CFMachPortGetPort(machPort);
 #if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
 	return rocketbootstrap_register(bootstrap, serverName, port);
@@ -262,6 +263,7 @@ static inline kern_return_t LMCheckInService(name_t serverName, CFRunLoopRef run
 	CFMachPortRef machPort = CFMachPortCreateWithPort(kCFAllocatorDefault, port, callback, &context, NULL);
 	CFRunLoopSourceRef machPortSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0);
 	CFRunLoopAddSource(runLoop, machPortSource, kCFRunLoopCommonModes);
+	CFRelease(machPortSource);
 #if LIGHTMESSAGING_USE_ROCKETBOOTSTRAP
 	rocketbootstrap_unlock(serverName);
 #endif
